@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>圖片投票網頁 - 支援批量上傳與多選投票</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Noto Sans TC', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+        /* Custom scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col justify-between selection:bg-sky-500 selection:text-white">
+
+    <!-- Header Navbar -->
+    <header class="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-sky-500/20">
+                    <i class="fa-solid fa-check-double text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold bg-gradient-to-r from-slate-900 via-sky-800 to-indigo-900 bg-clip-text text-transparent">
+                        圖片多選投票系統
+                    </h1>
+                    <p class="text-xs text-slate-500">支援批量上傳圖片、自訂投票限制與即時結果統計</p>
+                </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="flex items-center gap-2.5 flex-wrap justify-center">
+                <button id="openAddModalBtn" class="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition duration-200 flex items-center gap-2 shadow-md shadow-sky-600/20">
+                    <i class="fa-solid fa-layer-group"></i>
+                    <span>批量新增選項</span>
+                </button>
+                <button id="openConfigModalBtn" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-medium rounded-xl transition duration-200 flex items-center gap-1.5 border border-slate-200" title="設定投票規則">
+                    <i class="fa-solid fa-sliders text-slate-500"></i>
+                    <span>規則設定</span>
+                </button>
+                <button id="openResultsBtn" class="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs sm:text-sm font-semibold rounded-xl transition duration-200 flex items-center gap-2 border border-indigo-200/60">
+                    <i class="fa-solid fa-chart-pie text-indigo-600"></i>
+                    <span>檢視統計</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Voting Section -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow w-full">
+
+        <!-- Informational Banner & Dynamic Rule Notice -->
+        <section class="mb-8 p-4 sm:p-5 bg-gradient-to-r from-sky-500/10 via-indigo-500/5 to-purple-500/10 border border-sky-100 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
+            <div class="flex items-start gap-3.5">
+                <div class="p-2.5 bg-sky-500/10 text-sky-600 rounded-xl mt-0.5 sm:mt-0 flex-shrink-0">
+                    <i class="fa-solid fa-circle-info text-xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-sm sm:text-base font-semibold text-slate-800">投票說明與限制規則</h2>
+                    <p class="text-xs sm:text-sm text-slate-600 mt-0.5">
+                        點擊圖片即可勾選/取消。當前限制：<span id="ruleNoticeText" class="font-bold text-sky-700">無限制選取數量</span>
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 self-end md:self-center">
+                <span class="text-xs font-semibold px-3 py-1.5 bg-white/80 rounded-full border border-slate-200 text-slate-600 flex items-center gap-1.5 shadow-sm">
+                    <i class="fa-solid fa-images text-sky-500"></i>
+                    共 <span id="totalItemsCount" class="text-sky-600 font-bold">0</span> 個選項
+                </span>
+                <button id="clearAllItemsBtn" class="text-xs font-medium text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg transition" title="清空全部投票選項">
+                    <i class="fa-regular fa-trash-can mr-1"></i>清空全部
+                </button>
+            </div>
+        </section>
+
+        <!-- Image Voting Cards Grid -->
+        <section>
+            <div id="imageGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <!-- Injected via JavaScript -->
+            </div>
+            
+            <!-- Empty state when no images exist -->
+            <div id="emptyState" class="hidden flex-col items-center justify-center py-16 px-4 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-center">
+                <div class="w-16 h-16 rounded-2xl bg-sky-50 text-sky-500 flex items-center justify-center mb-4 text-3xl">
+                    <i class="fa-regular fa-images"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-800 mb-1">目前沒有任何投票項目</h3>
+                <p class="text-sm text-slate-500 mb-5 max-w-sm">您可以批量拖曳上傳圖片、貼上圖片網址，或載入系統預設示範圖片體驗。</p>
+                <div class="flex flex-wrap items-center justify-center gap-3">
+                    <button onclick="document.getElementById('openAddModalBtn').click()" class="px-4 py-2.5 bg-sky-600 text-white font-semibold text-xs sm:text-sm rounded-xl hover:bg-sky-700 transition shadow-md shadow-sky-600/20">
+                        <i class="fa-solid fa-file-circle-plus mr-1.5"></i>批量新增圖片
+                    </button>
+                    <button id="restoreDefaultBtn" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs sm:text-sm rounded-xl transition">
+                        載入預設範例圖
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Bottom Selection & Action Floating Bar -->
+    <div id="bottomBar" class="sticky bottom-4 z-20 max-w-xl mx-auto px-4 w-full transition-all duration-300">
+        <div class="glass-card rounded-2xl p-3.5 shadow-xl border border-white/80 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-sky-500 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-sky-500/30">
+                    <span id="selectedCount">0</span>
+                </div>
+                <div>
+                    <span class="text-xs sm:text-sm font-semibold text-slate-800 block">已選擇項目</span>
+                    <span id="selectionHint" class="text-[11px] text-slate-500">可直接送出投票</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="clearSelectionBtn" class="px-3 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition">
+                    清除勾選
+                </button>
+                <button id="submitVoteBtn" disabled class="px-5 py-2.5 bg-slate-200 text-slate-400 cursor-not-allowed font-semibold text-xs sm:text-sm rounded-xl transition duration-200 flex items-center gap-2 shadow-sm">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>送出投票</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Add Modal -->
+    <div id="addModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity">
+        <div class="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 transform transition-all max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center pb-4 border-b border-slate-100 mb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-layer-group text-sky-500"></i>
+                        批量新增投票項目
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-0.5">一次上傳多張圖片檔，或批量貼上圖片網址</p>
+                </div>
+                <button id="closeAddModalBtn" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 overflow-y-auto flex-grow pr-1">
+                <!-- Tab Switching -->
+                <div class="flex border-b border-slate-200">
+                    <button id="tabBatchFile" class="pb-2.5 px-4 text-xs sm:text-sm font-bold border-b-2 border-sky-500 text-sky-600 transition">
+                        <i class="fa-solid fa-images mr-1.5"></i>批量檔案上傳
+                    </button>
+                    <button id="tabBatchUrl" class="pb-2.5 px-4 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-700 transition">
+                        <i class="fa-solid fa-link mr-1.5"></i>批量 URL 網址
+                    </button>
+                </div>
+
+                <!-- Panel 1: Multi-file Dropzone -->
+                <div id="panelBatchFile" class="space-y-3">
+                    <div id="dropZone" class="border-2 border-dashed border-sky-200 bg-sky-50/50 hover:bg-sky-50 hover:border-sky-400 rounded-2xl p-6 text-center transition cursor-pointer">
+                        <div class="w-12 h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center mx-auto mb-2 text-xl">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                        </div>
+                        <p class="text-xs sm:text-sm text-slate-700 font-bold">點擊選擇，或將多張圖片拖曳至此處</p>
+                        <p class="text-[11px] text-slate-400 mt-1">支援 JPG, PNG, WEBP, GIF 等格式（可多選）</p>
+                        <input type="file" id="inputFileMultiple" accept="image/*" multiple class="hidden">
+                    </div>
+
+                    <!-- Batch Files Staging Preview List -->
+                    <div id="batchPreviewArea" class="hidden space-y-2">
+                        <div class="flex justify-between items-center text-xs text-slate-500 font-medium px-1">
+                            <span>待新增圖片列表 (<span id="stagedCount">0</span>)</span>
+                            <button id="clearStagedBtn" class="text-rose-500 hover:underline">清空選擇</button>
+                        </div>
+                        <div id="stagedGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-48 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-100">
+                            <!-- Staged file cards injected via JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel 2: Multi URL Textarea -->
+                <div id="panelBatchUrl" class="hidden space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">貼上圖片網址（每行一個網址，或用逗號分隔）</label>
+                        <textarea id="inputUrls" rows="6" placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg&#10;https://example.com/image3.jpg" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"></textarea>
+                    </div>
+                    <div class="p-3 bg-amber-50 border border-amber-100 rounded-xl text-[11px] text-amber-700 flex items-center gap-2">
+                        <i class="fa-solid fa-lightbulb text-amber-500 text-sm"></i>
+                        <span>提示：系統將自動解析出的網址依序命名為「選項 1」、「選項 2」，匯入後可自由修改標題。</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-4 border-t border-slate-100 flex justify-end gap-2.5 mt-2">
+                <button id="cancelAddBtn" class="px-4 py-2 text-xs sm:text-sm font-medium text-slate-500 hover:bg-slate-100 rounded-xl transition">取消</button>
+                <button id="confirmBatchAddBtn" class="px-5 py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition shadow-md shadow-sky-600/20 flex items-center gap-1.5">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>匯入並發布選項</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voting Rules Configuration Modal -->
+    <div id="configModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
+                <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-sky-500"></i>
+                    投票限制設定
+                </h3>
+                <button id="closeConfigModalBtn" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">最少選取數量 (0 表示不限制)</label>
+                    <input type="number" id="minSelectInput" min="0" value="0" class="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">最多選取數量 (0 表示不限制)</label>
+                    <input type="number" id="maxSelectInput" min="0" value="0" class="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:outline-none">
+                </div>
+            </div>
+
+            <div class="mt-6 pt-3 border-t border-slate-100 flex justify-end gap-2">
+                <button id="saveConfigBtn" class="px-5 py-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs sm:text-sm rounded-xl transition shadow-md shadow-sky-600/20">
+                    儲存設定
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Modal -->
+    <div id="resultsModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity">
+        <div class="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-column text-indigo-600"></i>
+                        即時投票統計與排行
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-0.5">累積總投票人次：<span id="totalVotesCount" class="font-bold text-indigo-600">0</span> 票</p>
+                </div>
+                <button id="closeResultsModalBtn" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Results Scrollable Area -->
+            <div id="resultsList" class="space-y-3.5 overflow-y-auto flex-grow pr-1">
+                <!-- Result items injected via JS -->
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center flex-wrap gap-2">
+                <button id="resetVotesBtn" class="px-3.5 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>重置所有票數</span>
+                </button>
+                <button id="finishResultsBtn" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs sm:text-sm font-semibold rounded-xl transition">
+                    關閉面板
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Toast Notification -->
+    <div id="toast" class="fixed top-20 right-4 z-50 transform translate-x-full transition-transform duration-300 flex items-center gap-3 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700/50">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+        <span id="toastMessage" class="text-xs sm:text-sm font-medium">訊息內容</span>
+    </div>
+
+    <footer class="mt-12 py-6 bg-white border-t border-slate-200/80 text-center text-xs text-slate-400">
+        <p>© 圖片投票網頁 - 支援批量上傳與多選互動系統</p>
+    </footer>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // Initial Default Presets
+        const defaultItems = [
+            { id: '1', title: '日落金黃山峰', url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80', votes: 14 },
+            { id: '2', title: '蔚藍海岸與海浪', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80', votes: 22 },
+            { id: '3', title: '幽靜森林步道', url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80', votes: 8 },
+            { id: '4', title: '璀璨都市夜景', url: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=800&q=80', votes: 19 }
+        ];
+
+        // State Management Variables
+        let items = [...defaultItems];
+        let selectedIds = new Set();
+        let stagedFiles = []; // Temporary storage for batch uploaded files
+        let currentBatchTab = 'file'; // 'file' or 'url'
+
+        // Voting Rule Configurations
+        let minSelectLimit = 0;
+        let maxSelectLimit = 0;
+
+        // DOM Elements
+        const imageGrid = document.getElementById('imageGrid');
+        const emptyState = document.getElementById('emptyState');
+        const selectedCountEl = document.getElementById('selectedCount');
+        const submitVoteBtn = document.getElementById('submitVoteBtn');
+        const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+        const totalItemsCountEl = document.getElementById('totalItemsCount');
+        const ruleNoticeText = document.getElementById('ruleNoticeText');
+        const selectionHint = document.getElementById('selectionHint');
+
+        // Modal Elements
+        const addModal = document.getElementById('addModal');
+        const configModal = document.getElementById('configModal');
+        const resultsModal = document.getElementById('resultsModal');
+        const openAddModalBtn = document.getElementById('openAddModalBtn');
+        const closeAddModalBtn = document.getElementById('closeAddModalBtn');
+        const cancelAddBtn = document.getElementById('cancelAddBtn');
+        const confirmBatchAddBtn = document.getElementById('confirmBatchAddBtn');
+
+        // Config Modal Controls
+        const openConfigModalBtn = document.getElementById('openConfigModalBtn');
+        const closeConfigModalBtn = document.getElementById('closeConfigModalBtn');
+        const saveConfigBtn = document.getElementById('saveConfigBtn');
+        const minSelectInput = document.getElementById('minSelectInput');
+        const maxSelectInput = document.getElementById('maxSelectInput');
+
+        // Batch Add Elements
+        const tabBatchFile = document.getElementById('tabBatchFile');
+        const tabBatchUrl = document.getElementById('tabBatchUrl');
+        const panelBatchFile = document.getElementById('panelBatchFile');
+        const panelBatchUrl = document.getElementById('panelBatchUrl');
+        const dropZone = document.getElementById('dropZone');
+        const inputFileMultiple = document.getElementById('inputFileMultiple');
+        const batchPreviewArea = document.getElementById('batchPreviewArea');
+        const stagedGrid = document.getElementById('stagedGrid');
+        const stagedCount = document.getElementById('stagedCount');
+        const clearStagedBtn = document.getElementById('clearStagedBtn');
+        const inputUrls = document.getElementById('inputUrls');
+
+        // Other Controls
+        const restoreDefaultBtn = document.getElementById('restoreDefaultBtn');
+        const clearAllItemsBtn = document.getElementById('clearAllItemsBtn');
+        const openResultsBtn = document.getElementById('openResultsBtn');
+        const closeResultsModalBtn = document.getElementById('closeResultsModalBtn');
+        const finishResultsBtn = document.getElementById('finishResultsBtn');
+        const resetVotesBtn = document.getElementById('resetVotesBtn');
+
+        // Toast Helpers
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toastMessage');
+
+        function showToast(msg, type = 'success') {
+            toastMessage.textContent = msg;
+            const icon = document.getElementById('toastIcon');
+            if (type === 'success') {
+                icon.className = 'fa-solid fa-circle-check text-emerald-400 text-lg';
+            } else if (type === 'error') {
+                icon.className = 'fa-solid fa-circle-exclamation text-rose-400 text-lg';
+            } else {
+                icon.className = 'fa-solid fa-circle-info text-sky-400 text-lg';
+            }
+
+            toast.classList.remove('translate-x-full');
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+            }, 3000);
+        }
+
+        function renderGrid() {
+            totalItemsCountEl.textContent = items.length;
+
+            if (items.length === 0) {
+                imageGrid.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+            } else {
+                imageGrid.classList.remove('hidden');
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+            }
+
+            imageGrid.innerHTML = items.map(item => {
+                const isSelected = selectedIds.has(item.id);
+                return `
+                    <div data-id="${item.id}" class="image-card group relative bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border ${isSelected ? 'border-sky-500 ring-4 ring-sky-500/20' : 'border-slate-100'} cursor-pointer transform hover:-translate-y-1">
+                        <!-- Image Container -->
+                        <div class="relative aspect-video sm:aspect-square overflow-hidden bg-slate-100">
+                            <img src="${item.url}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onerror="this.src='https://placehold.co/600x400/e2e8f0/64748b?text=圖片載入失敗'">
+                            
+                            <!-- Selection Checkbox Badge -->
+                            <div class="absolute top-3 right-3 z-10 w-8 h-8 rounded-full border-2 border-white/80 shadow-md flex items-center justify-center transition-all ${isSelected ? 'bg-sky-500 text-white border-sky-500 scale-110' : 'bg-black/30 backdrop-blur-md text-transparent group-hover:border-white'}">
+                                <i class="fa-solid fa-check text-xs"></i>
+                            </div>
+
+                            <!-- Gradient Hover Overlay -->
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-50 group-hover:opacity-30 transition-opacity"></div>
+                            
+                            <!-- Votes Badge -->
+                            <div class="absolute bottom-3 left-3 bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-medium text-white/90 flex items-center gap-1 border border-white/10">
+                                <i class="fa-solid fa-thumbs-up text-sky-400"></i>
+                                <span>${item.votes} 票</span>
+                            </div>
+                        </div>
+
+                        <!-- Card Header & Title Editing -->
+                        <div class="p-3.5 flex justify-between items-center gap-2">
+                            <input type="text" value="${item.title}" onchange="updateTitle('${item.id}', this.value)" onclick="event.stopPropagation()" class="font-semibold text-slate-800 text-xs sm:text-sm truncate bg-transparent hover:bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 rounded px-1.5 py-0.5 w-full transition" title="點擊即可修改名稱">
+                            <button onclick="deleteItem(event, '${item.id}')" class="text-slate-300 hover:text-rose-500 p-1.5 transition flex-shrink-0" title="刪除此選項">
+                                <i class="fa-regular fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Card Selection Click Handlers
+            document.querySelectorAll('.image-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const id = card.getAttribute('data-id');
+                    toggleSelection(id);
+                });
+            });
+        }
+
+        function updateTitle(id, newTitle) {
+            const item = items.find(i => i.id === id);
+            if (item && newTitle.trim()) {
+                item.title = newTitle.trim();
+                showToast('標題已更載');
+            }
+        }
+
+        function toggleSelection(id) {
+            if (selectedIds.has(id)) {
+                selectedIds.delete(id);
+            } else {
+                if (maxSelectLimit > 0 && selectedIds.size >= maxSelectLimit) {
+                    showToast(`最多只能選擇 ${maxSelectLimit} 項選項！`, 'error');
+                    return;
+                }
+                selectedIds.add(id);
+            }
+            updateSelectionUI();
+            renderGrid();
+        }
+
+        function updateSelectionUI() {
+            const count = selectedIds.size;
+            selectedCountEl.textContent = count;
+
+            let isValid = true;
+            let hintMsg = "已準備就緒";
+
+            if (minSelectLimit > 0 && count < minSelectLimit) {
+                isValid = false;
+                hintMsg = `最少需選取 ${minSelectLimit} 項`;
+            } else if (maxSelectLimit > 0 && count > maxSelectLimit) {
+                isValid = false;
+                hintMsg = `最多只能選取 ${maxSelectLimit} 項`;
+            }
+
+            selectionHint.textContent = hintMsg;
+
+            if (count > 0 && isValid) {
+                submitVoteBtn.disabled = false;
+                submitVoteBtn.className = "px-5 py-2.5 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-semibold text-xs sm:text-sm rounded-xl transition duration-200 flex items-center gap-2 shadow-lg shadow-sky-500/20 active:scale-95 cursor-pointer";
+            } else {
+                submitVoteBtn.disabled = true;
+                submitVoteBtn.className = "px-5 py-2.5 bg-slate-200 text-slate-400 cursor-not-allowed font-semibold text-xs sm:text-sm rounded-xl transition duration-200 flex items-center gap-2";
+            }
+        }
+
+        function updateRuleNoticeUI() {
+            if (minSelectLimit === 0 && maxSelectLimit === 0) {
+                ruleNoticeText.textContent = "無限制選取數量";
+            } else if (minSelectLimit > 0 && maxSelectLimit > 0) {
+                ruleNoticeText.textContent = `最少選 ${minSelectLimit} 項，最多選 ${maxSelectLimit} 項`;
+            } else if (minSelectLimit > 0) {
+                ruleNoticeText.textContent = `最少選取 ${minSelectLimit} 項`;
+            } else {
+                ruleNoticeText.textContent = `最多選取 ${maxSelectLimit} 項`;
+            }
+            updateSelectionUI();
+        }
+
+        function deleteItem(e, id) {
+            e.stopPropagation();
+            items = items.filter(item => item.id !== id);
+            selectedIds.delete(id);
+            updateSelectionUI();
+            renderGrid();
+            showToast('已成功刪除該選項', 'info');
+        }
+
+        // Action Buttons Event Listeners
+        submitVoteBtn.addEventListener('click', () => {
+            if (selectedIds.size === 0) return;
+
+            items = items.map(item => {
+                if (selectedIds.has(item.id)) {
+                    return { ...item, votes: item.votes + 1 };
+                }
+                return item;
+            });
+
+            const count = selectedIds.size;
+            selectedIds.clear();
+            updateSelectionUI();
+            renderGrid();
+            showToast(`已成功投下 ${count} 個項目的選票！`);
+            renderResults();
+        });
+
+        clearSelectionBtn.addEventListener('click', () => {
+            selectedIds.clear();
+            updateSelectionUI();
+            renderGrid();
+        });
+
+        clearAllItemsBtn.addEventListener('click', () => {
+            if (items.length === 0) return;
+            if (confirm('確定要清空所有的投票選項嗎？此操作將同時移除相關圖片與票數。')) {
+                items = [];
+                selectedIds.clear();
+                updateSelectionUI();
+                renderGrid();
+                showToast('已清空所有選項', 'info');
+            }
+        });
+
+        restoreDefaultBtn.addEventListener('click', () => {
+            items = [...defaultItems];
+            selectedIds.clear();
+            updateSelectionUI();
+            renderGrid();
+            showToast('已恢復系統預設圖片');
+        });
+
+        dropZone.addEventListener('click', () => inputFileMultiple.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-sky-500', 'bg-sky-100/50');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-sky-500', 'bg-sky-100/50');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-sky-500', 'bg-sky-100/50');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleMultipleFiles(e.dataTransfer.files);
+            }
+        });
+
+        inputFileMultiple.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                handleMultipleFiles(e.target.files);
+            }
+        });
+
+        function handleMultipleFiles(fileList) {
+            const filesArray = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+
+            if (filesArray.length === 0) {
+                showToast('請選擇有效的圖片檔案！', 'error');
+                return;
+            }
+
+            let loadedCount = 0;
+            filesArray.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const title = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+                    stagedFiles.push({
+                        title: title,
+                        url: e.target.result
+                    });
+                    loadedCount++;
+                    if (loadedCount === filesArray.length) {
+                        updateStagedPreviewGrid();
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function updateStagedPreviewGrid() {
+            stagedCount.textContent = stagedFiles.length;
+            if (stagedFiles.length > 0) {
+                batchPreviewArea.classList.remove('hidden');
+            } else {
+                batchPreviewArea.classList.add('hidden');
+                return;
+            }
+
+            stagedGrid.innerHTML = stagedFiles.map((f, idx) => `
+                <div class="relative bg-white p-1.5 rounded-lg border border-slate-200 flex items-center gap-2 overflow-hidden">
+                    <img src="${f.url}" class="w-8 h-8 object-cover rounded flex-shrink-0">
+                    <span class="text-[11px] text-slate-700 truncate font-medium flex-grow">${f.title}</span>
+                    <button onclick="removeStagedFile(${idx})" class="text-slate-400 hover:text-rose-500 p-1">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function removeStagedFile(index) {
+            stagedFiles.splice(index, 1);
+            updateStagedPreviewGrid();
+        }
+
+        clearStagedBtn.addEventListener('click', () => {
+            stagedFiles = [];
+            inputFileMultiple.value = '';
+            updateStagedPreviewGrid();
+        });
+
+        tabBatchFile.addEventListener('click', () => {
+            currentBatchTab = 'file';
+            tabBatchFile.className = "pb-2.5 px-4 text-xs sm:text-sm font-bold border-b-2 border-sky-500 text-sky-600 transition";
+            tabBatchUrl.className = "pb-2.5 px-4 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-700 transition";
+            panelBatchFile.classList.remove('hidden');
+            panelBatchUrl.classList.add('hidden');
+        });
+
+        tabBatchUrl.addEventListener('click', () => {
+            currentBatchTab = 'url';
+            tabBatchUrl.className = "pb-2.5 px-4 text-xs sm:text-sm font-bold border-b-2 border-sky-500 text-sky-600 transition";
+            tabBatchFile.className = "pb-2.5 px-4 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-700 transition";
+            panelBatchUrl.classList.remove('hidden');
+            panelBatchFile.classList.add('hidden');
+        });
+
+        confirmBatchAddBtn.addEventListener('click', () => {
+            let newItemsCount = 0;
+
+            if (currentBatchTab === 'file') {
+                if (stagedFiles.length === 0) {
+                    showToast('請先選擇或拖曳要上傳的圖片檔', 'error');
+                    return;
+                }
+
+                stagedFiles.forEach((fileObj, i) => {
+                    items.push({
+                        id: (Date.now() + i).toString(),
+                        title: fileObj.title || `選項 ${items.length + 1}`,
+                        url: fileObj.url,
+                        votes: 0
+                    });
+                    newItemsCount++;
+                });
+
+            } else {
+                const rawText = inputUrls.value.trim();
+                if (!rawText) {
+                    showToast('請貼上至少一個圖片網址', 'error');
+                    return;
+                }
+
+                // Split URLs by newlines or commas
+                const urls = rawText.split(/[\n,]+/).map(u => u.trim()).filter(u => u.length > 0);
+
+                if (urls.length === 0) {
+                    showToast('無法解析有效的網址', 'error');
+                    return;
+                }
+
+                urls.forEach((url, i) => {
+                    items.push({
+                        id: (Date.now() + i).toString(),
+                        title: `選項 ${items.length + 1}`,
+                        url: url,
+                        votes: 0
+                    });
+                    newItemsCount++;
+                });
+            }
+
+            renderGrid();
+            closeAddModal();
+            showToast(`成功批量匯入 ${newItemsCount} 個圖片選項！`);
+        });
+
+        // Config Modal Functionality
+        openConfigModalBtn.addEventListener('click', () => {
+            minSelectInput.value = minSelectLimit;
+            maxSelectInput.value = maxSelectLimit;
+            configModal.classList.remove('hidden');
+        });
+
+        closeConfigModalBtn.addEventListener('click', () => configModal.classList.add('hidden'));
+
+        saveConfigBtn.addEventListener('click', () => {
+            const minVal = parseInt(minSelectInput.value) || 0;
+            const maxVal = parseInt(maxSelectInput.value) || 0;
+
+            if (maxVal > 0 && minVal > maxVal) {
+                showToast('最少選取數量不能大於最多選取數量！', 'error');
+                return;
+            }
+
+            minSelectLimit = Math.max(0, minVal);
+            maxSelectLimit = Math.max(0, maxVal);
+
+            updateRuleNoticeUI();
+            configModal.classList.add('hidden');
+            showToast('已更新投票限制規則');
+        });
+
+        // Modal Controllers
+        openAddModalBtn.addEventListener('click', () => addModal.classList.remove('hidden'));
+
+        function closeAddModal() {
+            addModal.classList.add('hidden');
+            stagedFiles = [];
+            inputFileMultiple.value = '';
+            inputUrls.value = '';
+            updateStagedPreviewGrid();
+        }
+
+        closeAddModalBtn.addEventListener('click', closeAddModal);
+        cancelAddBtn.addEventListener('click', closeAddModal);
+
+        function renderResults() {
+            const resultsList = document.getElementById('resultsList');
+            const totalVotesCount = document.getElementById('totalVotesCount');
+
+            const totalVotes = items.reduce((acc, curr) => acc + curr.votes, 0);
+            totalVotesCount.textContent = totalVotes;
+
+            if (items.length === 0) {
+                resultsList.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">尚無任何投票選項</div>`;
+                return;
+            }
+
+            const maxVotes = Math.max(...items.map(i => i.votes), 0);
+            const sortedItems = [...items].sort((a, b) => b.votes - a.votes);
+
+            resultsList.innerHTML = sortedItems.map((item, idx) => {
+                const percentage = totalVotes > 0 ? ((item.votes / totalVotes) * 100).toFixed(1) : 0;
+                const isTop = item.votes > 0 && item.votes === maxVotes;
+
+                return `
+                    <div class="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3.5">
+                        <div class="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-slate-200">
+                            <img src="${item.url}" class="w-full h-full object-cover">
+                        </div>
+                        <div class="flex-grow min-w-0">
+                            <div class="flex justify-between items-center mb-1 gap-2">
+                                <div class="flex items-center gap-2 truncate">
+                                    <span class="text-xs font-bold text-slate-400">#${idx + 1}</span>
+                                    <h4 class="font-semibold text-xs sm:text-sm text-slate-800 truncate">${item.title}</h4>
+                                    ${isTop ? `<span class="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0"><i class="fa-solid fa-crown text-[9px]"></i> 最高票</span>` : ''}
+                                </div>
+                                <span class="text-xs font-bold text-slate-700 flex-shrink-0">${item.votes} 票 (${percentage}%)</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                                <div class="bg-gradient-to-r from-sky-500 to-indigo-600 h-2.5 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        openResultsBtn.addEventListener('click', () => {
+            renderResults();
+            resultsModal.classList.remove('hidden');
+        });
+
+        closeResultsModalBtn.addEventListener('click', () => resultsModal.classList.add('hidden'));
+        finishResultsBtn.addEventListener('click', () => resultsModal.classList.add('hidden'));
+
+        resetVotesBtn.addEventListener('click', () => {
+            if (confirm('確定要清空歸零目前的投票票數嗎？')) {
+                items = items.map(i => ({ ...i, votes: 0 }));
+                renderGrid();
+                renderResults();
+                showToast('已將所有選項票數歸零', 'info');
+            }
+        });
+
+        // Initialize on DOM load
+        window.addEventListener('DOMContentLoaded', () => {
+            renderGrid();
+            updateSelectionUI();
+            updateRuleNoticeUI();
+        });
+    </script>
+</body>
+</html>
